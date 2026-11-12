@@ -1,0 +1,78 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..b98d361 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_61.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/Makefile b/Makefile
+index 9dace6e..4206ed9 100644
+--- a/Makefile
++++ b/Makefile
+@@ -62,11 +62,12 @@ target/run/%.txt: | compile
+ 	@mkdir -p target/run
+ 	@echo "========================================\n"
+ 	@echo "Now we are going to run $(ALGO_NAME) algorithm\n"
++	@: > "$@.tmp"
+ 	@for FILE in tests/$(TEST_DIR)/*; do \
+-		var=$$(cat $$FILE); \
+-		eoc --no-color --batch --blind --parser 0.63.2 --home-tag 0.63.2 --target $(EOC_TARGET) --alone dataize --heap=8G $*.$*App $$var; \
+-		echo $$? > $@; \
++		var=$$(cat "$$FILE"); \
++		eoc --no-color --batch --blind --parser 0.63.2 --home-tag 0.63.2 --target $(EOC_TARGET) --alone dataize --heap=8G $*.$*App $$var >> "$@.tmp"; \
+ 	done
++	@mv "$@.tmp" "$@"
+ 
+ clean:
+ 	@for dir in src/eo src/java src/cpp; do \
+diff --git a/tests/check_61.py b/tests/check_61.py
+new file mode 100644
+index 0000000..d732837
+--- /dev/null
++++ b/tests/check_61.py
+@@ -0,0 +1,40 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Check run-target output and failure handling with a controlled EO command."""
++
++import os
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    folder = Path(temporary)
++    shutil.copy(root / 'Makefile', folder)
++    shutil.copytree(root / 'tests/edges', folder / 'tests/edges')
++    shutil.copytree(root / 'tests/list', folder / 'tests/list')
++    command = folder / 'eoc'
++    command.write_text(
++        '#!/usr/bin/env python3\nimport os, sys\n'
++        'print("RESULT " + sys.argv[-1])\n'
++        'sys.exit(7 if os.environ.get("FAIL_EOC") else 0)\n',
++        encoding='utf-8',
++    )
++    command.chmod(0o755)
++    environment = {**os.environ, 'PATH': str(folder) + os.pathsep + os.environ['PATH']}
++    for algorithm, source in [('prim', 'edges'), ('kruskal', 'edges'),
++                              ('dijkstra', 'list'), ('fordfulkerson', 'list')]:
++        target = f'target/run/{algorithm}.txt'
++        subprocess.run(['make', '-o', 'compile', target], cwd=folder, env=environment, check=True)
++        result = (folder / target).read_text().splitlines()
++        assert len(result) == len(list((folder / 'tests' / source).iterdir())), result
++        assert all(line.startswith('RESULT ') for line in result), result
++    target = folder / 'target/run/prim.txt'
++    target.unlink()
++    result = subprocess.run(
++        ['make', '-o', 'compile', 'target/run/prim.txt'], cwd=folder,
++        env={**environment, 'FAIL_EOC': '1'}, capture_output=True, text=True,
++    )
++    assert result.returncode != 0 and not target.exists(), result

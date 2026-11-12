@@ -1,0 +1,93 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..e60d0e2 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_62.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/java/Makefile b/src/java/Makefile
+index 13cdb0d..a44433f 100644
+--- a/src/java/Makefile
++++ b/src/java/Makefile
+@@ -7,13 +7,21 @@
+ .SECONDARY:
+ SHELL := bash
+ 
+-JAVA_FILES := $(wildcard **/*.java)
+-CLASS_FILES := $(JAVA_FILES:.java=.class)
++CLASS_FILES := targets/Dijkstra.class targets/FordFalkerson.class targets/Kruskal.class \
++    targets/GraphGenerator.class targets/prim/WeightGraph.class targets/prim/PrimMST.class
+ 
+ compile: $(CLASS_FILES)
+ 
+-%.class: %.java
+-	javac -d targets/ $<
++targets/Dijkstra.class: dijkstra/Dijkstra.java
++targets/FordFalkerson.class: fordfalkersonalg/FordFalkerson.java
++targets/Kruskal.class: kruskal/kruskal.java
++targets/GraphGenerator.class: generator/GraphGenerator.java
++targets/prim/WeightGraph.class: prim/WeightGraph.java
++targets/prim/PrimMST.class: prim/PrimMST.java targets/prim/WeightGraph.class
++
++$(CLASS_FILES):
++	mkdir -p targets/
++	javac -cp targets/ -d targets/ $<
+ 
+ clean:
+ 	rm -rf targets/
+diff --git a/src/java/kruskal/kruskal.java b/src/java/kruskal/kruskal.java
+index 70f2d81..b6e19e5 100644
+--- a/src/java/kruskal/kruskal.java
++++ b/src/java/kruskal/kruskal.java
+@@ -2,7 +2,6 @@
+  * SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
+  * SPDX-License-Identifier: MIT
+  */
+-import prim.WeightGraph;
+ 
+ import java.util.*;
+ import java.lang.*;
+diff --git a/tests/check_62.py b/tests/check_62.py
+new file mode 100644
+index 0000000..9eb7226
+--- /dev/null
++++ b/tests/check_62.py
+@@ -0,0 +1,33 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Check clean, incremental, and partial Java builds with GNU Make."""
++
++from pathlib import Path
++import shutil
++import subprocess
++import tempfile
++import time
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    source = Path(temporary) / 'java'
++    shutil.copytree(root / 'src/java', source)
++    subprocess.run(['make', 'clean'], cwd=source, check=True)
++    subprocess.run(['make', '-j4'], cwd=source, check=True)
++    target = source / 'targets'
++    expected = ['Dijkstra.class', 'FordFalkerson.class', 'Kruskal.class',
++                'GraphGenerator.class', 'prim/WeightGraph.class', 'prim/PrimMST.class']
++    assert all((target / name).is_file() for name in expected)
++    subprocess.run(['make', '-q'], cwd=source, check=True)
++    before = {name: (target / name).stat().st_mtime_ns for name in expected}
++    time.sleep(1.1)
++    (source / 'dijkstra/Dijkstra.java').touch()
++    subprocess.run(['make', '-j4'], cwd=source, check=True)
++    assert (target / 'Dijkstra.class').stat().st_mtime_ns > before['Dijkstra.class']
++    assert all((target / name).stat().st_mtime_ns == before[name]
++               for name in expected if name != 'Dijkstra.class')
++    (target / 'Kruskal.class').unlink()
++    subprocess.run(['make', '-j4'], cwd=source, check=True)
++    assert (target / 'Kruskal.class').is_file()
++    subprocess.run(['make', '-q'], cwd=source, check=True)

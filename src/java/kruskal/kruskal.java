@@ -2,7 +2,6 @@
  * SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
  * SPDX-License-Identifier: MIT
  */
-import prim.WeightGraph;
 
 import java.util.*;
 import java.lang.*;
@@ -53,6 +52,11 @@ class Kruskal {
     void KruskalMST()
     {
         Edge result[] = new Edge[V];
+        Map<Integer, Integer> indices = new HashMap<>();
+        for (Edge item : edge) {
+            indices.putIfAbsent(item.src, indices.size());
+            indices.putIfAbsent(item.dest, indices.size());
+        }
         int e = 0;
         int i = 0;
         for (i = 0; i < V; ++i)
@@ -74,8 +78,8 @@ class Kruskal {
         while (e < V - 1) {
             Edge next_edge = edge[i++];
 
-            int x = find(subsets, next_edge.src);
-            int y = find(subsets, next_edge.dest);
+            int x = find(subsets, indices.get(next_edge.src));
+            int y = find(subsets, indices.get(next_edge.dest));
 
             if (x != y) {
                 result[e++] = next_edge;
@@ -131,6 +135,6 @@ class Edge implements Comparable<Edge>
 
     public int compareTo(Edge compareEdge)
     {
-        return this.weight - compareEdge.weight;
+        return Integer.compare(this.weight, compareEdge.weight);
     }
 };

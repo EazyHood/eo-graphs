@@ -49,6 +49,10 @@ int main(int argc, char *argv[]) {
 
     int i = 1;
     int vNum = stoi(argv[i]);
+    if (vNum < 2 || vNum > MAX_V) {
+      cerr << "Vertex count must be between 2 and " << MAX_V << "\n";
+      return EXIT_FAILURE;
+    }
     ++i;
     numOfVertex = vNum;
     sourceVertex = 0;
@@ -64,7 +68,7 @@ int main(int argc, char *argv[]) {
       }
       i += eNum;
     }
-    int maxFlow = 0;
+    long long maxFlow = 0;
     int iterationResult = 0;
     while ((iterationResult = findFlow(sourceVertex, INF)) > 0) {
       fill(visited, visited + MAX_V, false);

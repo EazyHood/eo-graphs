@@ -7,19 +7,24 @@ import java.util.Arrays;
 
 public class Dijkstra {
   public static void dijkstra(int vNum, int[] GR, int st) {
-    int[] distance = new int[vNum];
+    for (int index = 0; index < vNum * vNum; ++index) {
+      if (GR[index] < 0) {
+        throw new IllegalArgumentException("Dijkstra requires non-negative edge weights");
+      }
+    }
+    long[] distance = new long[vNum];
     int count, index = 0, i, u;
     int[] path = new int[vNum];
     boolean[] visited = new boolean[vNum];
     for (i = 0; i < vNum; i++) {
-      distance[i] = Integer.MAX_VALUE;
+      distance[i] = Long.MAX_VALUE;
       visited[i] = false;
       path[i] = -1;
     }
     path[st] = st;
     distance[st] = 0;
     for (count = 0; count < vNum - 1; count++) {
-      int min = Integer.MAX_VALUE;
+      long min = Long.MAX_VALUE;
       for (i = 0; i < vNum; i++)
         if (!visited[i] && distance[i] <= min) {
           min = distance[i];
@@ -29,7 +34,7 @@ public class Dijkstra {
       visited[u] = true;
       for (i = 0; i < vNum; i++)
         if (!visited[i] && (GR[u * vNum + i] != 0) &&
-            (distance[u] != Integer.MAX_VALUE) &&
+            (distance[u] != Long.MAX_VALUE) &&
             (distance[u] + GR[u * vNum + i] < distance[i])) {
           distance[i] = distance[u] + GR[u * vNum + i];
           path[i] = u;
@@ -51,13 +56,24 @@ public class Dijkstra {
         String[] vArray = args[i].split(":");
         int u, v = 0, w;
         u = Integer.parseInt(vArray[0]);
+        if (u < 0 || u >= vNum) {
+          throw new IllegalArgumentException(
+              "Vertex " + u + " is outside the declared range 0.." + (vNum - 1));
+        }
         if (vArray.length > 1) {
           for (int j = 1; j < vArray.length; j++) {
             if (j % 2 == 0) {
               w = Integer.parseInt(vArray[j]);
+              if (w < 0) {
+                throw new IllegalArgumentException("Dijkstra requires non-negative edge weights");
+              }
               GR[u * vNum + v] = w;
             } else {
               v = Integer.parseInt(vArray[j]);
+              if (v < 0 || v >= vNum) {
+                throw new IllegalArgumentException(
+                    "Vertex " + v + " is outside the declared range 0.." + (vNum - 1));
+              }
             }
           }
         }

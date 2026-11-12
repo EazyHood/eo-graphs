@@ -5,20 +5,27 @@
 #include <climits>
 #include <cstring>
 #include <stdlib.h>
+#include <stdexcept>
 using namespace std;
 
 void dijkstra(int vNum, int* GR, int st)
 {
-    int distance[vNum], count, index, i, u, m=st, path[vNum];
+    for (int index = 0; index < vNum * vNum; ++index) {
+        if (GR[index] < 0) {
+            throw invalid_argument("Dijkstra requires non-negative edge weights");
+        }
+    }
+    long long distance[vNum];
+    int count, index, i, u, m=st, path[vNum];
     bool visited[vNum];
     for (i=0; i<vNum; i++){
-        distance[i]=INT_MAX; visited[i]=false;
+        distance[i]=LLONG_MAX; visited[i]=false;
         path[i]=-1;
     }
     path[st]=st;
     distance[st]=0;
     for (count=0; count<vNum-1; count++){
-        int min=INT_MAX;
+        long long min=LLONG_MAX;
         for (i=0; i<vNum; i++)
             if (!visited[i] && distance[i]<=min){
                 min=distance[i]; index=i;
@@ -26,7 +33,7 @@ void dijkstra(int vNum, int* GR, int st)
         u=index;
         visited[u]=true;
         for (i=0; i<vNum; i++)
-            if (!visited[i] && GR[u*vNum+i] && distance[u]!=INT_MAX &&
+            if (!visited[i] && GR[u*vNum+i] && distance[u]!=LLONG_MAX &&
             distance[u]+GR[u*vNum+i]<distance[i]){
                 distance[i]=distance[u]+GR[u*vNum+i];
                 path[i]=u;
@@ -51,7 +58,15 @@ int main(int argc, char* argv[]) {
       for (int j = 0; j < number_of_edges; ++j) {
         int v, w;
         sscanf(argv[i + j], "%d:%d", &v, &w);
-        GR[u * vNum + v] = w;
+        if (w < 0) {
+            cerr << "Dijkstra requires non-negative edge weights\n";
+            delete[] GR;
+            return EXIT_FAILURE;
+        }
+        int &weight = GR[u * vNum + v];
+        if (weight == 0 || w < weight) {
+            weight = w;
+        }
       }
       i += number_of_edges;
     }

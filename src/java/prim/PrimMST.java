@@ -32,6 +32,9 @@ public class PrimMST {
                 visit(minEdge.getW());
             }
         }
+        if (mst.size() != graph.getVertexNum() - 1) {
+            throw new IllegalArgumentException("A spanning tree requires a connected graph");
+        }
     }
 
     public List<WeightGraph.Edge> getMst() {
@@ -39,11 +42,11 @@ public class PrimMST {
     }
 
     public int getWeight() {
-        int total = 0;
+        long total = 0;
         for (WeightGraph.Edge edge : mst) {
             total += edge.getWeight();
         }
-        return total;
+        return Math.toIntExact(total);
     }
 
     private void visit(int v) {
@@ -75,12 +78,21 @@ public class PrimMST {
                 }
 
                 WeightGraph graph = new WeightGraph(vertices.size());
-                graph.addEdges(edges);
+                List<Integer> labels = new ArrayList<>(vertices);
+                Collections.sort(labels);
+                Map<Integer, Integer> indices = new HashMap<>();
+                for (int index = 0; index < labels.size(); ++index) {
+                    indices.put(labels.get(index), index);
+                }
+                for (WeightGraph.Edge edge : edges) {
+                    graph.addEdge(indices.get(edge.getV()), indices.get(edge.getW()), edge.getWeight());
+                }
 
                 PrimMST lazyPrimMST = new PrimMST(graph);
                 System.out.print("MST: ");
                 for(WeightGraph.Edge edge : lazyPrimMST.getMst())
-                    System.out.print(edge);
+                    System.out.printf("(%d %d - %d) ",
+                        labels.get(edge.getV()), labels.get(edge.getW()), edge.getWeight());
             }catch (Exception e){
                 System.exit(1);
             }

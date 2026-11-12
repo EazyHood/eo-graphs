@@ -1,0 +1,126 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..1b7b280 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_79.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/cpp/kruskal.cpp b/src/cpp/kruskal.cpp
+index 80f8052..7ee92b6 100644
+--- a/src/cpp/kruskal.cpp
++++ b/src/cpp/kruskal.cpp
+@@ -3,6 +3,7 @@
+ 
+ #include <iostream>
+ #include <set>
++#include <map>
+ #include <vector>
+ #include <algorithm>
+ #include <string>
+@@ -73,6 +74,11 @@ int myComp(const void* a, const void* b)
+ void KruskalMST(Graph* graph){
+ 	int V = graph->V;
+ 	Edge result[V];
++	map<int, int> indices;
++	for (int index = 0; index < graph->E; ++index) {
++		indices.emplace(graph->edge[index].src, indices.size());
++		indices.emplace(graph->edge[index].dest, indices.size());
++	}
+ 	int e = 0;
+ 	int i = 0;
+ 
+@@ -89,8 +95,8 @@ void KruskalMST(Graph* graph){
+ 	while (e < V - 1 && i < graph->E){
+ 		Edge next_edge = graph->edge[i++];
+ 
+-		int x = find(subsets, next_edge.src);
+-		int y = find(subsets, next_edge.dest);
++		int x = find(subsets, indices.at(next_edge.src));
++		int y = find(subsets, indices.at(next_edge.dest));
+ 
+ 
+ 		if (x != y) {
+diff --git a/src/cpp/prim.cpp b/src/cpp/prim.cpp
+index e9fe030..baf47d7 100644
+--- a/src/cpp/prim.cpp
++++ b/src/cpp/prim.cpp
+@@ -5,6 +5,8 @@
+ #include <cstring>
+ #include <sstream>
+ #include <set>
++#include <map>
++#include <vector>
+ using namespace std;
+ 
+ #define INF 9999999
+@@ -30,12 +32,18 @@ int main (int argc, char *argv[]) {
+     }
+   }
+ 
++  vector<int> labels(nodes.begin(), nodes.end());
++  map<int, int> indices;
++  for (int index = 0; index < labels.size(); ++index) {
++    indices.emplace(labels[index], index);
++  }
++
+   int G[nodes.size()][nodes.size()];
+   memset(G, 0, sizeof(int) * nodes.size() * nodes.size());
+ 
+   for(int t = 0; t < edgesCount; t++){
+-    int i = EDGES[t*3];
+-    int j = EDGES[t*3+1];
++    int i = indices.at(EDGES[t*3]);
++    int j = indices.at(EDGES[t*3+1]);
+     int w = EDGES[t*3+2];
+     G[i][j] = G[j][i] = w;
+   }
+@@ -84,7 +92,7 @@ int main (int argc, char *argv[]) {
+           }
+         }
+       }
+-      cout << "(" << x << " " << y << " - " << G[x][y] << ") ";
++      cout << "(" << labels[x] << " " << labels[y] << " - " << G[x][y] << ") ";
+       selected[y] = true;
+       no_edge++;
+     }
+diff --git a/tests/check_79.py b/tests/check_79.py
+new file mode 100644
+index 0000000..ab22e5f
+--- /dev/null
++++ b/tests/check_79.py
+@@ -0,0 +1,30 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run both MST commands on dense and sparse vertex labels."""
++
++from pathlib import Path
++import re
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    commands = []
++    for algorithm in ['prim', 'kruskal']:
++        executable = target / algorithm
++        subprocess.run(['g++', str(root / f'src/cpp/{algorithm}.cpp'), '-o', str(executable)], check=True)
++        commands.append([str(executable)])
++    for labels in [(0, 1, 2), (7, 42, 1000000000), (100, 900, 500)]:
++        first, second, third = labels
++        edges = [(first, second, 3), (second, third, 4), (first, third, 12)]
++        expected = {frozenset((first, second)), frozenset((second, third))}
++        for order in [edges, list(reversed(edges))]:
++            arguments = [str(value) for edge in order for value in edge]
++            for command in commands:
++                result = subprocess.run(command + arguments, check=True, capture_output=True, text=True, timeout=5)
++                found = re.findall(r'\((-?\d+) (-?\d+) - (-?\d+)\)', result.stdout)
++                assert len(found) == 2, (command, result.stdout)
++                assert {frozenset((int(a), int(b))) for a, b, _ in found} == expected, result.stdout
++                assert sum(int(weight) for _, _, weight in found) == 7, result.stdout

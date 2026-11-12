@@ -1,0 +1,81 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..f343f7b 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_83.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/cpp/prim.cpp b/src/cpp/prim.cpp
+index e9fe030..b81d090 100644
+--- a/src/cpp/prim.cpp
++++ b/src/cpp/prim.cpp
+@@ -31,13 +31,18 @@ int main (int argc, char *argv[]) {
+   }
+ 
+   int G[nodes.size()][nodes.size()];
++  bool present[nodes.size()][nodes.size()];
++  memset(present, false, sizeof(present));
+   memset(G, 0, sizeof(int) * nodes.size() * nodes.size());
+ 
+   for(int t = 0; t < edgesCount; t++){
+     int i = EDGES[t*3];
+     int j = EDGES[t*3+1];
+     int w = EDGES[t*3+2];
+-    G[i][j] = G[j][i] = w;
++    if (!present[i][j] || w < G[i][j]) {
++      G[i][j] = G[j][i] = w;
++      present[i][j] = present[j][i] = true;
++    }
+   }
+ 
+   int no_edge;            // number of edge
+@@ -73,7 +78,7 @@ int main (int argc, char *argv[]) {
+       for (int i = 0; i < nodes.size(); i++) {
+         if (selected[i]) {
+             for (int j = 0; j < nodes.size(); j++) {
+-              if (!selected[j] && G[i][j]) { // not in selected and there is an edge
++              if (!selected[j] && present[i][j]) { // not in selected and there is an edge
+                   if (min > G[i][j]) {
+                       min = G[i][j];
+                       x = i;
+diff --git a/tests/check_83.py b/tests/check_83.py
+new file mode 100644
+index 0000000..12e910b
+--- /dev/null
++++ b/tests/check_83.py
+@@ -0,0 +1,30 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Check parallel and zero-weight edges through the C++ Prim command."""
++
++from pathlib import Path
++import re
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    executable = Path(temporary) / 'prim'
++    subprocess.run(['g++', str(root / 'src/cpp/prim.cpp'), '-o', str(executable)], check=True)
++    for edges, weight in [
++        ([(0, 1, 5), (0, 1, 3), (1, 0, 7), (0, 1, 6)], 3),
++        ([(0, 1, 0), (1, 0, 4)], 0),
++        ([(0, 1, 0), (1, 2, 1), (0, 2, 5)], 1),
++        ([(0, 1, 0), (1, 2, 0), (0, 2, 0)], 0),
++        ([(0, 1, 2), (1, 2, 1), (0, 2, 5)], 3),
++        ([(0, 1, -3), (1, 2, 1), (0, 2, 5)], -2),
++    ]:
++        vertices = {node for first, second, _ in edges for node in [first, second]}
++        for ordered in [edges, list(reversed(edges))]:
++            args = [str(value) for edge in ordered for value in edge]
++            result = subprocess.run([str(executable), *args], check=True,
++                                    capture_output=True, text=True, timeout=5)
++            found = re.findall(r'\((-?\d+) (-?\d+) - (-?\d+)\)', result.stdout)
++            assert len(found) == len(vertices) - 1, result.stdout
++            assert sum(int(item[2]) for item in found) == weight, result.stdout

@@ -1,0 +1,65 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..d8deed5 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_69.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/java/prim/PrimMST.java b/src/java/prim/PrimMST.java
+index c7def3a..c66107a 100644
+--- a/src/java/prim/PrimMST.java
++++ b/src/java/prim/PrimMST.java
+@@ -38,8 +38,8 @@ public class PrimMST {
+         return mst;
+     }
+ 
+-    public int getWeight() {
+-        int total = 0;
++    public long getWeight() {
++        long total = 0;
+         for (WeightGraph.Edge edge : mst) {
+             total += edge.getWeight();
+         }
+diff --git a/tests/check_69.py b/tests/check_69.py
+new file mode 100644
+index 0000000..37522df
+--- /dev/null
++++ b/tests/check_69.py
+@@ -0,0 +1,32 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run the regression through compiled native entry points."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    regression = target / 'WeightCheck.java'
++    regression.write_text("""package prim;
++public class WeightCheck {
++    public static void main(String[] args) {
++        for (int weight : new int[] {2000000000, -2000000000, 0, 5}) {
++            WeightGraph graph = new WeightGraph(3);
++            graph.addEdge(0, 1, weight);
++            graph.addEdge(1, 2, weight);
++            long expected = 2L * weight;
++            long actual = new PrimMST(graph).getWeight();
++            if (actual != expected) {
++                throw new AssertionError(actual + " != " + expected);
++            }
++        }
++    }
++}
++""", encoding='utf-8')
++    sources = [str(source) for source in (root / 'src/java/prim').glob('*.java')]
++    subprocess.run(['javac', '-d', str(target), *sources, str(regression)], check=True)
++    subprocess.run(['java', '-cp', str(target), 'prim.WeightCheck'], check=True, timeout=5)

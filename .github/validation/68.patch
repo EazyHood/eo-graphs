@@ -1,0 +1,53 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..466ce83 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_68.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/java/kruskal/kruskal.java b/src/java/kruskal/kruskal.java
+index 70f2d81..ed4d137 100644
+--- a/src/java/kruskal/kruskal.java
++++ b/src/java/kruskal/kruskal.java
+@@ -131,6 +131,6 @@ class Edge implements Comparable<Edge>
+ 
+     public int compareTo(Edge compareEdge)
+     {
+-        return this.weight - compareEdge.weight;
++        return Integer.compare(this.weight, compareEdge.weight);
+     }
+ };
+diff --git a/tests/check_68.py b/tests/check_68.py
+new file mode 100644
+index 0000000..ea7cb2b
+--- /dev/null
++++ b/tests/check_68.py
+@@ -0,0 +1,23 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run the regression through compiled native entry points."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    sources = [str(source) for source in (root / 'src/java').rglob('*.java')]
++    subprocess.run(['javac', '-d', str(target), *sources], check=True)
++    for edges in [
++        ['0', '1', '-2147483648', '1', '2', '1', '0', '2', '2147483647'],
++        ['0', '2', '2147483647', '1', '2', '1', '0', '1', '-2147483648'],
++    ]:
++        result = subprocess.run(
++            ['java', '-cp', str(target), 'Kruskal', *edges],
++            check=True, capture_output=True, text=True, timeout=5,
++        )
++        assert result.stdout.strip() == 'MST: (0 1 - -2147483648) (1 2 - 1)', result.stdout

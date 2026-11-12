@@ -1,0 +1,81 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..d8deed5 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_69.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/java/prim/PrimMST.java b/src/java/prim/PrimMST.java
+index c7def3a..c8911c5 100644
+--- a/src/java/prim/PrimMST.java
++++ b/src/java/prim/PrimMST.java
+@@ -39,11 +39,11 @@ public class PrimMST {
+     }
+ 
+     public int getWeight() {
+-        int total = 0;
++        long total = 0;
+         for (WeightGraph.Edge edge : mst) {
+             total += edge.getWeight();
+         }
+-        return total;
++        return Math.toIntExact(total);
+     }
+ 
+     private void visit(int v) {
+diff --git a/tests/check_69.py b/tests/check_69.py
+new file mode 100644
+index 0000000..26f35f8
+--- /dev/null
++++ b/tests/check_69.py
+@@ -0,0 +1,45 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run the regression through compiled native entry points."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    regression = target / 'WeightCheck.java'
++    regression.write_text("""package prim;
++public class WeightCheck {
++    public static void main(String[] args) {
++        for (int weight : new int[] {2000000000, -2000000000, 0, 5, -5}) {
++            WeightGraph graph = new WeightGraph(3);
++            graph.addEdge(0, 1, weight);
++            graph.addEdge(1, 2, weight);
++            long expected = 2L * weight;
++            try {
++                int actual = new PrimMST(graph).getWeight();
++                if (actual != expected) {
++                    throw new AssertionError(actual + " != " + expected);
++                }
++            } catch (ArithmeticException error) {
++                if (expected >= Integer.MIN_VALUE && expected <= Integer.MAX_VALUE) {
++                    throw error;
++                }
++            }
++        }
++        WeightGraph mixed = new WeightGraph(4);
++        mixed.addEdge(0, 1, -2000000000);
++        mixed.addEdge(1, 2, -2000000000);
++        mixed.addEdge(2, 3, 2000000000);
++        if (new PrimMST(mixed).getWeight() != -2000000000) {
++            throw new AssertionError("A representable final weight must be returned");
++        }
++    }
++}
++""", encoding='utf-8')
++    sources = [str(source) for source in (root / 'src/java/prim').glob('*.java')]
++    subprocess.run(['javac', '-d', str(target), *sources, str(regression)], check=True)
++    subprocess.run(['java', '-cp', str(target), 'prim.WeightCheck'], check=True, timeout=5)

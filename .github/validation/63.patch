@@ -1,0 +1,90 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..3b94291 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_63.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/java/generator/GraphGenerator.java b/src/java/generator/GraphGenerator.java
+index 6d9d0f8..eeb5d1e 100644
+--- a/src/java/generator/GraphGenerator.java
++++ b/src/java/generator/GraphGenerator.java
+@@ -44,21 +44,27 @@ public class GraphGenerator {
+     }
+ 
+     public static void main(String[] args) {
+-        if(args.length == 2)
+-            try{
+-                int outType = Integer.parseInt(args[0]);
+-                int vNum = Integer.parseInt(args[1]);
+-                switch (outType){
+-                    case OUTPUT_TYPE_ADJACENCY_LISTS:
+-                        System.out.print(generateAdjacencyLists(vNum));
+-                        break;
+-                    case OUTPUT_TYPE_EDGES:
+-                    default:
+-                        System.out.print(generateEdges(vNum));
+-                }
+-
+-            }catch (Exception e){
+-                System.exit(1);
++        if (args.length != 2) {
++            System.err.println("Usage: GraphGenerator <format: 0|1> <vertices>");
++            System.exit(1);
++        }
++        try {
++            int outType = Integer.parseInt(args[0]);
++            int vNum = Integer.parseInt(args[1]);
++            switch (outType){
++                case OUTPUT_TYPE_ADJACENCY_LISTS:
++                    System.out.print(generateAdjacencyLists(vNum));
++                    break;
++                case OUTPUT_TYPE_EDGES:
++                    System.out.print(generateEdges(vNum));
++                    break;
++                default:
++                    throw new IllegalArgumentException("Unknown output format: " + outType);
+             }
++
++        }catch (IllegalArgumentException e){
++            System.err.println(e.getMessage());
++            System.exit(1);
++        }
+     }
+ }
+diff --git a/tests/check_63.py b/tests/check_63.py
+new file mode 100644
+index 0000000..a02afb4
+--- /dev/null
++++ b/tests/check_63.py
+@@ -0,0 +1,25 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run the regression through compiled native entry points."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    subprocess.run(['javac', '-d', str(target), str(root / 'src/java/generator/GraphGenerator.java')], check=True)
++    for arguments in [[], ['0'], ['0', '3', 'extra'], ['7', '3'], ['-1', '3'], ['abc', '3'], ['0', 'abc']]:
++        result = subprocess.run(
++            ['java', '-cp', str(target), 'GraphGenerator', *arguments],
++            capture_output=True, text=True, timeout=5,
++        )
++        assert result.returncode != 0 and result.stderr.strip() and not result.stdout, (arguments, result)
++    for form in ['0', '1']:
++        result = subprocess.run(
++            ['java', '-cp', str(target), 'GraphGenerator', form, '3'],
++            check=True, capture_output=True, text=True, timeout=5,
++        )
++        assert result.stdout.strip() and not result.stderr, (form, result)

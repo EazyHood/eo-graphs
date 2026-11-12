@@ -1,0 +1,59 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..3a680d1 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_85.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/cpp/dijkstra.cpp b/src/cpp/dijkstra.cpp
+index 68f625d..42a465e 100644
+--- a/src/cpp/dijkstra.cpp
++++ b/src/cpp/dijkstra.cpp
+@@ -51,7 +51,10 @@ int main(int argc, char* argv[]) {
+       for (int j = 0; j < number_of_edges; ++j) {
+         int v, w;
+         sscanf(argv[i + j], "%d:%d", &v, &w);
+-        GR[u * vNum + v] = w;
++        int &weight = GR[u * vNum + v];
++        if (weight == 0 || w < weight) {
++            weight = w;
++        }
+       }
+       i += number_of_edges;
+     }
+diff --git a/tests/check_85.py b/tests/check_85.py
+new file mode 100644
+index 0000000..0ea0c35
+--- /dev/null
++++ b/tests/check_85.py
+@@ -0,0 +1,25 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Run the regression through compiled native entry points."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    executable = target / 'dijkstra'
++    subprocess.run(['g++', str(root / 'src/cpp/dijkstra.cpp'), '-o', str(executable)], check=True)
++    for edges in [('1:1', '1:9'), ('1:9', '1:1'), ('1:1', '1:1')]:
++        result = subprocess.run(
++            [str(executable), '3', '3', '0', *edges, '2:1', '1', '2', '1:3'],
++            check=True, capture_output=True, text=True, timeout=5,
++        )
++        assert result.stdout.strip() == 'Paths: 0 0 0', (edges, result.stdout)
++    result = subprocess.run(
++        [str(executable), '3', '2', '0', '1:9', '2:1', '1', '2', '1:3'],
++        check=True, capture_output=True, text=True, timeout=5,
++    )
++    assert result.stdout.strip() == 'Paths: 0 2 0', result.stdout

@@ -1,0 +1,106 @@
+diff --git a/.github/workflows/make.yml b/.github/workflows/make.yml
+index b3bce7f..0a82956 100644
+--- a/.github/workflows/make.yml
++++ b/.github/workflows/make.yml
+@@ -23,6 +23,7 @@ jobs:
+         with:
+           distribution: temurin
+           java-version: '25'
++      - run: python3 tests/check_67.py
+       - run: npm install -g eolang
+       - run: make
+   telegram:
+diff --git a/src/cpp/dijkstra.cpp b/src/cpp/dijkstra.cpp
+index 68f625d..d10734b 100644
+--- a/src/cpp/dijkstra.cpp
++++ b/src/cpp/dijkstra.cpp
+@@ -5,10 +5,16 @@
+ #include <climits>
+ #include <cstring>
+ #include <stdlib.h>
++#include <stdexcept>
+ using namespace std;
+ 
+ void dijkstra(int vNum, int* GR, int st)
+ {
++    for (int index = 0; index < vNum * vNum; ++index) {
++        if (GR[index] < 0) {
++            throw invalid_argument("Dijkstra requires non-negative edge weights");
++        }
++    }
+     int distance[vNum], count, index, i, u, m=st, path[vNum];
+     bool visited[vNum];
+     for (i=0; i<vNum; i++){
+@@ -51,6 +57,11 @@ int main(int argc, char* argv[]) {
+       for (int j = 0; j < number_of_edges; ++j) {
+         int v, w;
+         sscanf(argv[i + j], "%d:%d", &v, &w);
++        if (w < 0) {
++            cerr << "Dijkstra requires non-negative edge weights\n";
++            delete[] GR;
++            return EXIT_FAILURE;
++        }
+         GR[u * vNum + v] = w;
+       }
+       i += number_of_edges;
+diff --git a/src/java/dijkstra/Dijkstra.java b/src/java/dijkstra/Dijkstra.java
+index 7316935..d610f35 100644
+--- a/src/java/dijkstra/Dijkstra.java
++++ b/src/java/dijkstra/Dijkstra.java
+@@ -7,6 +7,11 @@ import java.util.Arrays;
+ 
+ public class Dijkstra {
+   public static void dijkstra(int vNum, int[] GR, int st) {
++    for (int weight : GR) {
++      if (weight < 0) {
++        throw new IllegalArgumentException("Dijkstra requires non-negative edge weights");
++      }
++    }
+     int[] distance = new int[vNum];
+     int count, index = 0, i, u;
+     int[] path = new int[vNum];
+@@ -55,6 +60,9 @@ public class Dijkstra {
+           for (int j = 1; j < vArray.length; j++) {
+             if (j % 2 == 0) {
+               w = Integer.parseInt(vArray[j]);
++              if (w < 0) {
++                throw new IllegalArgumentException("Dijkstra requires non-negative edge weights");
++              }
+               GR[u * vNum + v] = w;
+             } else {
+               v = Integer.parseInt(vArray[j]);
+diff --git a/tests/check_67.py b/tests/check_67.py
+new file mode 100644
+index 0000000..25b0b50
+--- /dev/null
++++ b/tests/check_67.py
+@@ -0,0 +1,29 @@
++# SPDX-FileCopyrightText: Copyright (c) 2020-2026 Objectionary
++# SPDX-License-Identifier: MIT
++
++"""Exercise the native algorithm through its public entry point."""
++
++from pathlib import Path
++import subprocess
++import tempfile
++
++root = Path(__file__).resolve().parents[1]
++with tempfile.TemporaryDirectory() as temporary:
++    target = Path(temporary)
++    subprocess.run(['g++', str(root / 'src/cpp/dijkstra.cpp'), '-o', str(target / 'dijkstra')], check=True)
++    subprocess.run(['javac', '-d', str(target), str(root / 'src/java/dijkstra/Dijkstra.java')], check=True)
++    commands = [[str(target / 'dijkstra')], ['java', '-cp', str(target), 'Dijkstra']]
++    cases = [
++        (['3', '2', '0', '1:2', '2:5', '0', '1', '1', '2', '1:-10'],
++         ['0:1:2:2:5', '1', '2:1:-10'], False),
++        (['3', '0', '0', '1', '1', '2:-1', '0', '2'], ['0', '1:2:-1', '2'], False),
++        (['2', '2', '0', '1:-1', '1:2', '0', '1'], ['0:1:-1:1:2', '1'], False),
++        (['2', '1', '0', '1:2', '0', '1'], ['0:1:2', '1'], True),
++        (['2', '1', '0', '1:0', '0', '1'], ['0:1:0', '1'], True),
++    ]
++    for cpp, java, valid in cases:
++        for command, args in zip(commands, [cpp, java]):
++            result = subprocess.run(command + args, capture_output=True, text=True, timeout=5)
++            assert (result.returncode == 0) == valid, (args, result)
++            if not valid:
++                assert 'non-negative edge weights' in result.stderr, result.stderr
